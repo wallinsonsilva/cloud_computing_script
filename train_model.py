@@ -5,8 +5,7 @@
 
 
 import tensorflow as tf
- 
-import tensorflow_datasets as tfds
+
 import tensorflow_recommenders as tfrs
 
 import pandas as pd
@@ -15,49 +14,9 @@ from sqlalchemy import create_engine
 from datetime import datetime, date, timedelta
 
 
-# In[32]:
-
-
-import sys
-sys.path.append('../')
-from conecta_banco import BancoNordestao
-
-bn = BancoNordestao()
-
-dw = bn.retorna_engine('dw')
-
-
-# In[88]:
-
-
-sql_cupom = """
-select
-id_cliente::text,
-c.nome_material
-from sch_fato.fato_cupom_material a
-	inner join (select * from sch_dim.dim_data where data = current_date - 1) b
-		on a.id_data = b.id_data
-	inner join sch_dim.dim_material c
-		on a.id_material = c.id_material
-	inner join sch_dim.dim_centro d
-		on a.id_centro = d.id_centro
-where id_cliente is not null 
-"""
-
-cupom = pd.read_sql(sql_cupom, dw)
-
-
-# In[35]:
-
-
-sql_material = """
-select distinct
-nome_material
-from sch_dim.dim_material
-"""
-
-material = pd.read_sql(sql_material, dw)
-
+cupom = pd.read_csv("cupons.csv")
+cupom['id_cliente']  = cupom['id_cliente'].astype('str')
+material = pd.read_csv("material.csv")
 
 # In[89]:
 
@@ -93,30 +52,6 @@ tf_cupom = tf_cupom.map(lambda x: {
 tf_material = tf_material.map(lambda x: x["nome_material"])
 
 
-# In[58]:
-
-
-# Ratings data.
-ratings = tfds.load("movielens/100k-ratings", split="train")
-# Features of all the available movies.
-movies = tfds.load("movielens/100k-movies", split="train")
-
-
-# In[92]:
-
-
-tf_cupom
-
-
-# In[68]:
-
-
-tf_material
-
-
-# In[98]:
-
-
 material.nome_material.nunique()
 
 
@@ -137,18 +72,18 @@ cupom.id_cliente.nunique()
 
 class CuponsModel(tfrs.Model):
   """Client prediction model."""
- 
+
   def __init__(self):
     # The `__init__` method sets up the model architecture.
     super().__init__()
- 
+
     # How large the representation vectors are for inputs: larger vectors make
     # for a more expressive model but may cause over-fitting.
     embedding_dim = 32
     num_unique_users = 9953
     num_unique_movies = 66838
     eval_batch_size = 128
-    
+
     self.user_model = tf.keras.Sequential([
       # We first turn the raw user ids into contiguous integers by looking them
       # up in a vocabulary.
@@ -157,13 +92,13 @@ class CuponsModel(tfrs.Model):
       # We then map the result into embedding vectors.
       tf.keras.layers.Embedding(num_unique_users, embedding_dim)
     ])
-    
+
     self.material_model = tf.keras.Sequential([
       tf.keras.layers.experimental.preprocessing.StringLookup(
           max_tokens=num_unique_movies),
       tf.keras.layers.Embedding(num_unique_movies, embedding_dim)
     ])
-    
+
 # The `Task` objects has two purposes: (1) it computes the loss and (2)
     # keeps track of metrics.
     self.task = tfrs.tasks.Retrieval(
@@ -173,14 +108,14 @@ class CuponsModel(tfrs.Model):
         metrics=tfrs.metrics.FactorizedTopK(
             candidates=tf_material.batch(eval_batch_size).map(self.material_model)
         )
-    ) 
+    )
   def compute_loss(self, features, training=False):
     # The `compute_loss` method determines how loss is computed.
- 
+
     # Compute user and item embeddings.
     user_embeddings = self.user_model(features["id_cliente"])
     material_embeddings = self.material_model(features["nome_material"])
- 
+
     # Pass them into the task to get the resulting loss. The lower the loss is, the
     # better the model is at telling apart true watches from watches that did
     # not happen in the training data.
@@ -192,7 +127,7 @@ class CuponsModel(tfrs.Model):
 
 model = CuponsModel()
 model.compile(optimizer=tf.keras.optimizers.Adagrad(0.1))
- 
+
 model.fit(tf_cupom.batch(10000), verbose=False)
 
 
@@ -201,7 +136,7 @@ model.fit(tf_cupom.batch(10000), verbose=False)
 
 index = tfrs.layers.factorized_top_k.BruteForce(model.user_model)
 index.index(tf_material.batch(1000).map(model.material_model), tf_material)
- 
+
 # Get recommendations.
 _, titles = index(tf.constant(["46355"]))
 print(f"Recommendations for user 46355: {titles[0, :3]}")
@@ -242,24 +177,17 @@ import os
 # In[107]:
 
 
-# Export the query model.
-with tempfile.TemporaryDirectory() as tmp:
-  path = os.path.join(tmp, "model")
+# # Export the query model.
+# with tempfile.TemporaryDirectory() as tmp:
+#   path = os.path.join(tmp, "model")
 
-  # Save the index.
-  index.save(path)
+# Save the index.
+index.save("model")
 
-  # Load it back; can also be done in TensorFlow Serving.
-  loaded = tf.keras.models.load_model(path)
+# Load it back; can also be done in TensorFlow Serving.
+loaded = tf.keras.models.load_model("model")
 
-  # Pass a user id in, get top predicted movie titles back.
-  scores, titles = loaded(["28573"])
+# Pass a user id in, get top predicted movie titles back.
+scores, titles = loaded(["28573"])
 
-  print(f"Recommendations: {titles[0][:3]}")
-
-
-# In[106]:
-
-
-path
-
+print(f"Recommendations: {titles[0][:3]}")
