@@ -139,14 +139,14 @@ index.index(tf_material.batch(1000).map(model.material_model), tf_material)
 
 # Get recommendations.
 _, titles = index(tf.constant(["46355"]))
-print(f"Recommendations for user 46355: {titles[0, :3]}")
+print("Recommendations for user 46355: {titles[0, :3]}")
 
 
 # In[116]:
 
 
 _, titles = index(tf.constant(["194466"]))
-print(f"Recommendations for user 194466: {titles[0, :3]}")
+print("Recommendations for user 194466: {titles[0, :3]}")
 
 
 # In[128]:
@@ -190,4 +190,4 @@ loaded = tf.keras.models.load_model("model")
 # Pass a user id in, get top predicted movie titles back.
 scores, titles = loaded(["28573"])
 
-print(f"Recommendations: {titles[0][:3]}")
+print("Recommendations: {titles[0][:3]}")
