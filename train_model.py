@@ -14,9 +14,9 @@ from sqlalchemy import create_engine
 from datetime import datetime, date, timedelta
 
 
-cupom = pd.read_csv("../dados/cupons.csv")
+cupom = pd.read_csv("./dados/cupons.csv")
 cupom['id_cliente']  = cupom['id_cliente'].astype('str')
-material = pd.read_csv("../dados/material.csv")
+material = pd.read_csv("./dados/material.csv")
 
 # In[89]:
 
